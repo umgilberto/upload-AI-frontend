@@ -1,5 +1,5 @@
 import { Button } from "./components/ui/button";
-import { Github, FileVideo, Upload, Wand2 } from "lucide-react";
+import { Github, Wand2 } from "lucide-react";
 import { Separator } from "./components/ui/separator";
 import { Textarea } from "./components/ui/textarea";
 import { Label } from "./components/ui/label";
@@ -11,7 +11,57 @@ import {
   SelectValue,
 } from "./components/ui/select";
 import { Slider } from "./components/ui/slider";
+import { VideoInputForm } from "./components/video-input-form";
+import { useEffect, useState } from "react";
+import { IOptions, PromptSelect } from "./components/promptSelect";
+import { api, baseURL } from "./lib/axios";
+import { useCompletion } from "ai/react";
+interface IPrompt {
+  id: string;
+  title: string;
+  template: string;
+}
+
+interface IPromptResponse {
+  data: IPrompt[];
+}
+
 export function App() {
+  const [prompts, setPrompts] = useState<IOptions[]>([]);
+  const [temperature, setTemperature] = useState<number>(0.5);
+  const [videoId, setVideoId] = useState<string | null>(null);
+
+  function handlePromptSelected(prompt: IOptions) {
+    setInput(prompt.value);
+  }
+
+  const {
+    input,
+    setInput,
+    handleInputChange,
+    handleSubmit,
+    completion,
+    isLoading,
+  } = useCompletion({
+    api: `${baseURL}/ai/complete`,
+    body: {
+      videoId,
+      temperature,
+    },
+    headers:{
+      'Content-type': 'application/json'
+    }
+  });
+  useEffect(() => {
+    api.get("/prompts").then((response: IPromptResponse) => {
+      const newArray: IOptions[] = response.data.map((prompt) => ({
+        value: prompt.template,
+        label: prompt.title,
+      }));
+      setPrompts(newArray);
+    });
+  }, []);
+
   return (
     <div className='min-h-screen flex flex-col'>
       <div className='px-6 py-3 flex items-center justify-between border-b'>
@@ -31,6 +81,8 @@ export function App() {
         <div className='flex flex-col flex-1 gap-4'>
           <div className='grid grid-rows-2 gap-4 flex-1'>
             <Textarea
+              value={input}
+              onChange={handleInputChange}
               placeholder='Inclua o promp para a IA'
               className='resize-none p-5 leading-relaxed'
             />
@@ -38,6 +90,7 @@ export function App() {
               placeholder='Resultado gerado pela IA leading-relaxed'
               className='resize-none p-5'
               readOnly
+              value={completion}
             />
           </div>
           <p className='text-sm text-muted-foreground'>
@@ -48,50 +101,16 @@ export function App() {
           </p>
         </div>
         <aside className='w-80 space-y-6'>
-          <form className='space-y-6'>
-            <label
-              htmlFor='video'
-              className='border w-full flex rounded-md aspect-video cursor-pointer border-dashed text-sm flex-col gap-2 items-center justify-center text-muted-foreground hover:bg-primary/5'
-            >
-              <FileVideo />
-              Selecione um video
-            </label>
-            <input
-              id='video'
-              type='file'
-              accept='video/mp4'
-              className='sr-only'
-            />
-            <Separator />
-            <div className='space-y-2'>
-              <Label htmlFor='transcription_prompt' className=''>
-                Prompt de transcrição
-              </Label>
-              <Textarea
-                id='transcription_prompt'
-                className='h-20 leading-relaxed'
-                placeholder='Inclua palavras-chaves mencionadas no video separadas por vírgula (,)'
-              />
-            </div>
-            <Button type='submit' className='w-full'>
-              Carregar video
-              <Upload className='w-4 h-4 ml-2' />
-            </Button>
-          </form>
+          <VideoInputForm onUploadVideo={setVideoId} />
+
           <Separator />
-          <form className='space-y-6'>
-            <div className='space-y-2'>
-              <Label>Prompt</Label>
-              <Select defaultValue='gpt3.5'>
-                <SelectTrigger>
-                  <SelectValue placeholder='Selecione um prompt...' />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value='title'>Título do Youtube</SelectItem>
-                  <SelectItem value='desc'>Descrição do YouTube</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          <form onSubmit={handleSubmit} className='space-y-6'>
+            <PromptSelect
+              label='Prompts'
+              options={prompts}
+              placeholder='Selecione um prompt...'
+              handlePromptSelected={handlePromptSelected}
+            />
 
             <div className='space-y-2'>
               <Label>Modelo</Label>
@@ -112,14 +131,20 @@ export function App() {
 
             <div className='space-y-4'>
               <Label>Temperatura</Label>
-              <Slider min={0} max={1} step={0.1} />
+              <Slider
+                min={0}
+                max={1}
+                step={0.1}
+                value={[temperature]}
+                onValueChange={(value) => setTemperature(value[0])}
+              />
               <span className='block text-xs text-muted-foreground italic'>
                 Valores mais altos temdem a deixar o resultado mais criativo e
                 com possíveiss erros
               </span>
             </div>
             <Separator />
-            <Button type='submit' className='w-full'>
+            <Button disabled={isLoading} type='submit' className='w-full'>
               Executar
               <Wand2 className='w-4 h-4 ml-2' />
             </Button>
